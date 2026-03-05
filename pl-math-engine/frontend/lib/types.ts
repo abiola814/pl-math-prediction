@@ -229,6 +229,38 @@ export interface MarketPick {
   correct: boolean | null;
 }
 
+export interface GameOfTheWeekMarket {
+  label: string;
+  confidence: number;
+}
+
+export interface GameOfTheWeek {
+  fixture_api_id: number;
+  home_team: string;
+  away_team: string;
+  date: string;
+  matchday: number | null;
+  predicted_home_goals: number;
+  predicted_away_goals: number;
+  score_probability: number;
+  top_scorelines: [string, number][];
+  top_markets: GameOfTheWeekMarket[];
+  best_pick_label: string;
+  best_pick_confidence: number;
+  btts_recommendation: string;
+  btts_confidence: number;
+  corner_pick: string | null;
+  corner_confidence: number | null;
+  card_pick: string | null;
+  card_confidence: number | null;
+  actual_home_goals: number | null;
+  actual_away_goals: number | null;
+  is_finished: boolean;
+  result_correct: boolean | null;
+  score_correct: boolean | null;
+  markets_correct: MarketPick[] | null;
+}
+
 export interface ResultWithPrediction {
   fixture_api_id: number;
   home_team: string;

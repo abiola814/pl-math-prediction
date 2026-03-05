@@ -9,6 +9,7 @@ import {
   GoalFrequency,
   ScorelineFrequencyItem,
   TeamComparisonData,
+  GameOfTheWeek,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -66,4 +67,12 @@ export async function getScorelineFrequency(teamName: string): Promise<Scoreline
 
 export async function getTeamComparison(teamName: string): Promise<TeamComparisonData> {
   return fetchAPI<TeamComparisonData>(`/teams/${encodeURIComponent(teamName)}/comparison`);
+}
+
+export async function getGameOfTheWeek(): Promise<GameOfTheWeek | null> {
+  try {
+    return await fetchAPI<GameOfTheWeek>("/predictions/game-of-the-week");
+  } catch {
+    return null;
+  }
 }
