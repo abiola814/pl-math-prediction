@@ -100,6 +100,7 @@ export interface AccuracyData {
   btts_accuracy: number | null;
   corner_line_accuracy: number | null;
   card_line_accuracy: number | null;
+  best_pick_accuracy: number | null;
   message: string | null;
 }
 
@@ -229,12 +230,7 @@ export interface MarketPick {
   correct: boolean | null;
 }
 
-export interface GameOfTheWeekMarket {
-  label: string;
-  confidence: number;
-}
-
-export interface GameOfTheWeek {
+export interface GameOfTheWeekItem {
   fixture_api_id: number;
   home_team: string;
   away_team: string;
@@ -242,23 +238,20 @@ export interface GameOfTheWeek {
   matchday: number | null;
   predicted_home_goals: number;
   predicted_away_goals: number;
-  score_probability: number;
-  top_scorelines: [string, number][];
-  top_markets: GameOfTheWeekMarket[];
   best_pick_label: string;
   best_pick_confidence: number;
-  btts_recommendation: string;
-  btts_confidence: number;
-  corner_pick: string | null;
-  corner_confidence: number | null;
-  card_pick: string | null;
-  card_confidence: number | null;
   actual_home_goals: number | null;
   actual_away_goals: number | null;
   is_finished: boolean;
-  result_correct: boolean | null;
-  score_correct: boolean | null;
-  markets_correct: MarketPick[] | null;
+  pick_correct: boolean | null;
+}
+
+export interface GameOfTheWeek {
+  games: GameOfTheWeekItem[];
+  total_games: number;
+  finished_games: number;
+  correct_picks: number;
+  accuracy: number | null;
 }
 
 export interface ResultWithPrediction {

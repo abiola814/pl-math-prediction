@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models.fixture import Fixture
 from app.models.prediction import Prediction as PredictionModel
 from app.prediction_engine.prediction_service import PredictionService
-from app.schemas.dashboard import GameOfTheWeekMarket, GameOfTheWeekResponse, MarketPick
+from app.schemas.dashboard import GameOfTheWeekItem, GameOfTheWeekResponse, MarketPick
 from app.schemas.prediction import AccuracyResponse, PredictionResponse, RefreshResponse, ScorelineSchema, MarketSchema, CornerSchema, CardSchema, LLMVerdictSchema
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
@@ -174,14 +174,56 @@ def _check_team_ou(market: str, goals: int) -> bool | None:
     return None
 
 
+def _best_pick_for_pred(pred) -> tuple[str, float] | None:
+    """Find the single highest-confidence market pick for a prediction."""
+    picks = []
+    if pred.market_confidence:
+        picks.append((pred.recommended_market, pred.market_confidence))
+    if pred.btts_confidence:
+        label = "BTTS Yes" if pred.btts_pick else "BTTS No"
+        picks.append((label, pred.btts_confidence))
+    if pred.home_market_confidence:
+        picks.append((pred.home_recommended_market, pred.home_market_confidence))
+    if pred.away_market_confidence:
+        picks.append((pred.away_recommended_market, pred.away_market_confidence))
+    if pred.corner_confidence:
+        picks.append((f"{pred.corner_recommended_pick} {pred.corner_recommended_line} Corners", pred.corner_confidence))
+    if pred.card_confidence:
+        picks.append((f"{pred.card_recommended_pick} {pred.card_recommended_line} Cards", pred.card_confidence))
+    if not picks:
+        return None
+    return max(picks, key=lambda x: x[1])
+
+
+def _evaluate_pick(label: str, pred, actual_home: int, actual_away: int) -> bool | None:
+    """Check if a best pick was correct given actual results."""
+    actual_total = actual_home + actual_away
+    if "BTTS" in label:
+        btts_actual = actual_home >= 1 and actual_away >= 1
+        return btts_actual if "Yes" in label else not btts_actual
+    elif "Home" in label:
+        return _check_team_ou(label, actual_home)
+    elif "Away" in label:
+        return _check_team_ou(label, actual_away)
+    elif "Corners" in label:
+        if pred.actual_total_corners is not None:
+            return _check_ou(label.replace(" Corners", ""), pred.actual_total_corners)
+        return None
+    elif "Cards" in label:
+        if pred.actual_total_cards is not None:
+            return _check_ou(label.replace(" Cards", ""), pred.actual_total_cards)
+        return None
+    else:
+        return _check_ou(label, actual_total)
+
+
 @router.get("/game-of-the-week", response_model=GameOfTheWeekResponse | None)
 async def get_game_of_the_week(db: Session = Depends(get_db)):
-    """Return the single best prediction of the gameweek — the Game of the Week.
+    """Return all games of the week with the best pick for each game.
 
-    Picks the match with the highest overall market confidence from all
-    predictions for the current gameweek.
+    For every prediction in the current gameweek, picks the single
+    highest-confidence market and checks if it was correct (for finished matches).
     """
-    # Get all predictions that have upcoming fixtures (or recently finished this week)
     one_week_ago = datetime.utcnow() - timedelta(days=3)
     one_week_ahead = datetime.utcnow() + timedelta(days=7)
 
@@ -191,143 +233,72 @@ async def get_game_of_the_week(db: Session = Depends(get_db)):
             PredictionModel.match_date >= one_week_ago,
             PredictionModel.match_date <= one_week_ahead,
         )
+        .order_by(PredictionModel.match_date.asc())
         .all()
     )
 
     if not predictions:
         return None
 
-    # For each prediction, find the highest confidence across all markets
-    best_pred = None
-    best_confidence = 0.0
-    best_label = ""
+    # Load fixtures for matchday info
+    fixture_ids = [p.fixture_api_id for p in predictions]
+    fixtures = db.query(Fixture).filter(Fixture.api_id.in_(fixture_ids)).all()
+    fix_map = {f.api_id: f for f in fixtures}
+
+    games: list[GameOfTheWeekItem] = []
+    finished_count = 0
+    correct_count = 0
 
     for pred in predictions:
-        picks = []
-        if pred.market_confidence:
-            picks.append((pred.recommended_market, pred.market_confidence))
-        if pred.btts_confidence:
-            label = "BTTS Yes" if pred.btts_pick else "BTTS No"
-            picks.append((label, pred.btts_confidence))
-        if pred.home_market_confidence:
-            picks.append((pred.home_recommended_market, pred.home_market_confidence))
-        if pred.away_market_confidence:
-            picks.append((pred.away_recommended_market, pred.away_market_confidence))
-        if pred.corner_confidence:
-            picks.append((f"{pred.corner_recommended_pick} {pred.corner_recommended_line} Corners", pred.corner_confidence))
-        if pred.card_confidence:
-            picks.append((f"{pred.card_recommended_pick} {pred.card_recommended_line} Cards", pred.card_confidence))
-
-        if not picks:
+        best = _best_pick_for_pred(pred)
+        if not best:
             continue
 
-        top = max(picks, key=lambda x: x[1])
-        if top[1] > best_confidence:
-            best_confidence = top[1]
-            best_label = top[0]
-            best_pred = pred
+        label, confidence = best
+        fixture = fix_map.get(pred.fixture_api_id)
 
-    if not best_pred:
-        return None
+        is_finished = False
+        actual_home = None
+        actual_away = None
+        pick_correct = None
 
-    p = best_pred
+        if pred.actual_home_goals is not None:
+            is_finished = True
+            actual_home = pred.actual_home_goals
+            actual_away = pred.actual_away_goals
+            pick_correct = _evaluate_pick(label, pred, actual_home, actual_away)
+            finished_count += 1
+            if pick_correct:
+                correct_count += 1
+        elif fixture and fixture.status == "FT" and fixture.home_goals is not None:
+            is_finished = True
+            actual_home = fixture.home_goals
+            actual_away = fixture.away_goals
+            pick_correct = _evaluate_pick(label, pred, actual_home, actual_away)
+            finished_count += 1
+            if pick_correct:
+                correct_count += 1
 
-    # Build top 3 market picks sorted by confidence
-    all_markets = []
-    if p.market_confidence:
-        all_markets.append(GameOfTheWeekMarket(label=p.recommended_market, confidence=round(p.market_confidence, 4)))
-    if p.btts_confidence:
-        btts_label = "BTTS Yes" if p.btts_pick else "BTTS No"
-        all_markets.append(GameOfTheWeekMarket(label=btts_label, confidence=round(p.btts_confidence, 4)))
-    if p.home_market_confidence:
-        all_markets.append(GameOfTheWeekMarket(label=p.home_recommended_market, confidence=round(p.home_market_confidence, 4)))
-    if p.away_market_confidence:
-        all_markets.append(GameOfTheWeekMarket(label=p.away_recommended_market, confidence=round(p.away_market_confidence, 4)))
-    if p.corner_confidence:
-        all_markets.append(GameOfTheWeekMarket(label=f"{p.corner_recommended_pick} {p.corner_recommended_line} Corners", confidence=round(p.corner_confidence, 4)))
-    if p.card_confidence:
-        all_markets.append(GameOfTheWeekMarket(label=f"{p.card_recommended_pick} {p.card_recommended_line} Cards", confidence=round(p.card_confidence, 4)))
-
-    all_markets.sort(key=lambda m: m.confidence, reverse=True)
-    top_markets = all_markets[:3]
-
-    # Build top scorelines from DB (stored as score_probability for the predicted score)
-    # We don't have the full distribution in DB, so use the predicted score as the top
-    top_scorelines = [(f"{p.predicted_home_goals}-{p.predicted_away_goals}", round(p.score_probability, 4))]
-
-    # Check if match has finished — look up the fixture
-    fixture = (
-        db.query(Fixture)
-        .filter(Fixture.api_id == p.fixture_api_id)
-        .first()
-    )
-
-    is_finished = False
-    actual_home = None
-    actual_away = None
-    result_correct = None
-    score_correct = None
-    markets_correct = None
-
-    if p.actual_home_goals is not None:
-        is_finished = True
-        actual_home = p.actual_home_goals
-        actual_away = p.actual_away_goals
-        actual_total = actual_home + actual_away
-
-        pred_result = _get_result(p.predicted_home_goals, p.predicted_away_goals)
-        act_result = _get_result(actual_home, actual_away)
-        result_correct = pred_result == act_result
-        score_correct = (p.predicted_home_goals == actual_home and p.predicted_away_goals == actual_away)
-
-        # Evaluate each market pick
-        markets_correct = []
-        for m in top_markets:
-            correct = None
-            if "BTTS" in m.label:
-                btts_actual = actual_home >= 1 and actual_away >= 1
-                correct = btts_actual if "Yes" in m.label else not btts_actual
-            elif "Home" in m.label:
-                correct = _check_team_ou(m.label, actual_home)
-            elif "Away" in m.label:
-                correct = _check_team_ou(m.label, actual_away)
-            elif "Corners" in m.label:
-                if p.actual_total_corners is not None:
-                    correct = _check_ou(m.label.replace(" Corners", ""), p.actual_total_corners)
-            elif "Cards" in m.label:
-                if p.actual_total_cards is not None:
-                    correct = _check_ou(m.label.replace(" Cards", ""), p.actual_total_cards)
-            else:
-                correct = _check_ou(m.label, actual_total)
-            markets_correct.append(MarketPick(label=m.label, confidence=m.confidence, correct=correct))
-    elif fixture and fixture.status == "FT" and fixture.home_goals is not None:
-        is_finished = True
-        actual_home = fixture.home_goals
-        actual_away = fixture.away_goals
+        games.append(GameOfTheWeekItem(
+            fixture_api_id=pred.fixture_api_id,
+            home_team=pred.home_team_name,
+            away_team=pred.away_team_name,
+            date=pred.match_date,
+            matchday=fixture.matchday if fixture else None,
+            predicted_home_goals=pred.predicted_home_goals,
+            predicted_away_goals=pred.predicted_away_goals,
+            best_pick_label=label,
+            best_pick_confidence=round(confidence, 4),
+            actual_home_goals=actual_home,
+            actual_away_goals=actual_away,
+            is_finished=is_finished,
+            pick_correct=pick_correct,
+        ))
 
     return GameOfTheWeekResponse(
-        fixture_api_id=p.fixture_api_id,
-        home_team=p.home_team_name,
-        away_team=p.away_team_name,
-        date=p.match_date,
-        matchday=fixture.matchday if fixture else None,
-        predicted_home_goals=p.predicted_home_goals,
-        predicted_away_goals=p.predicted_away_goals,
-        score_probability=round(p.score_probability, 4),
-        top_scorelines=top_scorelines,
-        top_markets=top_markets,
-        best_pick_label=best_label,
-        best_pick_confidence=round(best_confidence, 4),
-        btts_recommendation="BTTS Yes" if p.btts_pick else "BTTS No",
-        btts_confidence=round(p.btts_confidence, 4),
-        corner_pick=f"{p.corner_recommended_pick} {p.corner_recommended_line} Corners" if p.corner_recommended_pick else None,
-        corner_confidence=round(p.corner_confidence, 4) if p.corner_confidence else None,
-        card_pick=f"{p.card_recommended_pick} {p.card_recommended_line} Cards" if p.card_recommended_pick else None,
-        card_confidence=round(p.card_confidence, 4) if p.card_confidence else None,
-        actual_home_goals=actual_home,
-        actual_away_goals=actual_away,
-        is_finished=is_finished,
-        result_correct=result_correct,
-        score_correct=score_correct,
-        markets_correct=markets_correct,
+        games=games,
+        total_games=len(games),
+        finished_games=finished_count,
+        correct_picks=correct_count,
+        accuracy=round(correct_count / finished_count * 100, 1) if finished_count > 0 else None,
     )

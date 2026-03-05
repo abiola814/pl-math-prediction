@@ -5,7 +5,7 @@ import { GameOfTheWeek as GameOfTheWeekType } from "@/lib/types";
 import { getGameOfTheWeek } from "@/lib/api";
 
 export default function GameOfTheWeek() {
-  const [game, setGame] = useState<GameOfTheWeekType | null>(null);
+  const [data, setData] = useState<GameOfTheWeekType | null>(null);
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -18,9 +18,9 @@ export default function GameOfTheWeek() {
 
     async function load() {
       try {
-        const data = await getGameOfTheWeek();
-        if (data) {
-          setGame(data);
+        const result = await getGameOfTheWeek();
+        if (result && result.games.length > 0) {
+          setData(result);
           setTimeout(() => setVisible(true), 400);
         }
       } catch {
@@ -35,19 +35,10 @@ export default function GameOfTheWeek() {
   function dismiss() {
     setVisible(false);
     sessionStorage.setItem("gotw_dismissed", "1");
-    setTimeout(() => setGame(null), 300);
+    setTimeout(() => setData(null), 300);
   }
 
-  if (loading || !game) return null;
-
-  const matchDate = new Date(game.date);
-  const dateStr = matchDate.toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  if (loading || !data) return null;
 
   return (
     <div
@@ -60,7 +51,7 @@ export default function GameOfTheWeek() {
 
       {/* Card */}
       <div
-        className={`relative bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto transform transition-all duration-300 ${
+        className={`relative bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto transform transition-all duration-300 ${
           visible ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
         }`}
       >
@@ -71,7 +62,9 @@ export default function GameOfTheWeek() {
               <p className="text-[10px] font-bold text-purple-300 uppercase tracking-widest">
                 Game of the Week
               </p>
-              <p className="text-lg font-bold mt-0.5">Top Pick This Week</p>
+              <p className="text-lg font-bold mt-0.5">
+                Best Picks — {data.total_games} Games
+              </p>
             </div>
             <button
               onClick={dismiss}
@@ -83,147 +76,102 @@ export default function GameOfTheWeek() {
               </svg>
             </button>
           </div>
-        </div>
 
-        <div className="px-5 py-4 space-y-4">
-          {/* Date & Matchday */}
-          <p className="text-xs text-gray-500 text-center">
-            {dateStr}
-            {game.matchday && <span className="ml-2 text-gray-400">Matchday {game.matchday}</span>}
-          </p>
-
-          {/* Teams and Predicted Score */}
-          <div className="flex items-center justify-between">
-            <div className="flex-1 text-right">
-              <p className="font-bold text-gray-900 text-sm">{game.home_team}</p>
-            </div>
-            <div className="mx-4 flex items-center gap-2">
-              <span className="text-3xl font-bold text-purple-900">
-                {game.predicted_home_goals}
+          {/* Accuracy summary if there are finished games */}
+          {data.finished_games > 0 && (
+            <div className="mt-2 flex items-center gap-3 text-sm">
+              <span className="bg-purple-600 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                {data.accuracy}% Hit Rate
               </span>
-              <span className="text-gray-400 text-lg">-</span>
-              <span className="text-3xl font-bold text-purple-900">
-                {game.predicted_away_goals}
+              <span className="text-purple-300 text-xs">
+                {data.correct_picks}/{data.finished_games} correct
               </span>
-            </div>
-            <div className="flex-1 text-left">
-              <p className="font-bold text-gray-900 text-sm">{game.away_team}</p>
-            </div>
-          </div>
-
-          <p className="text-center text-xs text-gray-500">
-            Score probability: {Math.round(game.score_probability * 100)}%
-          </p>
-
-          {/* Best Pick Highlight */}
-          <div className="bg-purple-50 rounded-xl p-4 text-center">
-            <p className="text-[10px] text-purple-500 font-bold uppercase tracking-widest mb-1">
-              Best Pick
-            </p>
-            <p className="text-lg font-bold text-purple-900">{game.best_pick_label}</p>
-            <div className="mt-2 flex items-center justify-center gap-2">
-              <div className="bg-purple-200 rounded-full h-2 w-28 overflow-hidden">
-                <div
-                  className="bg-purple-600 h-full rounded-full"
-                  style={{ width: `${Math.round(game.best_pick_confidence * 100)}%` }}
-                />
-              </div>
-              <span className="text-sm font-bold text-purple-700">
-                {Math.round(game.best_pick_confidence * 100)}%
-              </span>
-            </div>
-          </div>
-
-          {/* Top 3 Market Picks */}
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-2">Top Market Picks</p>
-            <div className="space-y-1.5">
-              {game.top_markets.map((m, i) => (
-                <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                  <span className="text-sm font-medium text-gray-800">{m.label}</span>
-                  <span className="text-sm font-bold text-purple-700">
-                    {Math.round(m.confidence * 100)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* BTTS + Corners + Cards row */}
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="bg-gray-50 rounded-lg p-2">
-              <p className="font-semibold text-gray-700">{game.btts_recommendation}</p>
-              <p className="text-purple-600 font-bold">{Math.round(game.btts_confidence * 100)}%</p>
-            </div>
-            {game.corner_pick && (
-              <div className="bg-gray-50 rounded-lg p-2">
-                <p className="font-semibold text-gray-700">{game.corner_pick}</p>
-                <p className="text-purple-600 font-bold">{Math.round((game.corner_confidence || 0) * 100)}%</p>
-              </div>
-            )}
-            {game.card_pick && (
-              <div className="bg-gray-50 rounded-lg p-2">
-                <p className="font-semibold text-gray-700">{game.card_pick}</p>
-                <p className="text-purple-600 font-bold">{Math.round((game.card_confidence || 0) * 100)}%</p>
-              </div>
-            )}
-          </div>
-
-          {/* Result Section (if match is finished) */}
-          {game.is_finished && game.actual_home_goals !== null && (
-            <div className="border-t border-gray-200 pt-4">
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-center">
-                Final Result
-              </p>
-              <div className="flex items-center justify-center gap-3 mb-3">
-                <span className="text-2xl font-bold text-gray-900">
-                  {game.actual_home_goals}
-                </span>
-                <span className="text-gray-400">-</span>
-                <span className="text-2xl font-bold text-gray-900">
-                  {game.actual_away_goals}
-                </span>
-              </div>
-
-              <div className="flex justify-center gap-2 mb-3">
-                {game.score_correct && (
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                    Exact Score Hit!
-                  </span>
-                )}
-                {game.result_correct && !game.score_correct && (
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
-                    Result Correct
-                  </span>
-                )}
-                {game.result_correct === false && (
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                    Result Wrong
-                  </span>
-                )}
-              </div>
-
-              {/* Market results */}
-              {game.markets_correct && game.markets_correct.length > 0 && (
-                <div className="space-y-1">
-                  {game.markets_correct.map((m, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-gray-50">
-                      <span className="text-gray-700">{m.label}</span>
-                      {m.correct === true && (
-                        <span className="font-bold text-green-600">Hit</span>
-                      )}
-                      {m.correct === false && (
-                        <span className="font-bold text-red-500">Miss</span>
-                      )}
-                      {m.correct === null && (
-                        <span className="text-gray-400">N/A</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
+        </div>
+
+        {/* Games List */}
+        <div className="px-4 py-3 space-y-2">
+          {data.games.map((g) => {
+            const dateStr = new Date(g.date).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            return (
+              <div
+                key={g.fixture_api_id}
+                className={`rounded-xl p-3 border ${
+                  g.is_finished
+                    ? g.pick_correct
+                      ? "border-green-200 bg-green-50"
+                      : "border-red-200 bg-red-50"
+                    : "border-gray-200 bg-gray-50"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  {/* Teams + Score */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-semibold text-gray-900 truncate">{g.home_team}</span>
+                      <span className="text-gray-400 text-xs">vs</span>
+                      <span className="font-semibold text-gray-900 truncate">{g.away_team}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{dateStr}</p>
+                  </div>
+
+                  {/* Predicted score */}
+                  <div className="text-center px-2">
+                    <p className="text-xs text-gray-400">Pred</p>
+                    <p className="font-bold text-purple-900 text-sm">
+                      {g.predicted_home_goals}-{g.predicted_away_goals}
+                    </p>
+                  </div>
+
+                  {/* Actual score if finished */}
+                  {g.is_finished && g.actual_home_goals !== null && (
+                    <div className="text-center px-2">
+                      <p className="text-xs text-gray-400">Actual</p>
+                      <p className="font-bold text-gray-900 text-sm">
+                        {g.actual_home_goals}-{g.actual_away_goals}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Best pick */}
+                <div className="mt-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      {g.best_pick_label}
+                    </span>
+                    <span className="text-xs font-bold text-purple-700">
+                      {Math.round(g.best_pick_confidence * 100)}%
+                    </span>
+                  </div>
+
+                  {/* Result badge */}
+                  {g.is_finished && (
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                        g.pick_correct
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {g.pick_correct ? "Hit" : "Miss"}
+                    </span>
+                  )}
+
+                  {!g.is_finished && (
+                    <span className="text-xs text-gray-400">Pending</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* Footer */}

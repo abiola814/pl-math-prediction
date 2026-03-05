@@ -386,6 +386,8 @@ class PredictionService:
         corner_line_correct = 0
         card_line_total = 0
         card_line_correct = 0
+        best_pick_total = 0
+        best_pick_correct = 0
 
         for p in predictions:
             actual_h = p.actual_home_goals
@@ -456,6 +458,50 @@ class PredictionService:
                     elif not is_over and p.actual_total_cards < p.card_recommended_line:
                         card_line_correct += 1
 
+            # Best Pick — single highest-confidence pick across all markets
+            best_picks = []
+            if p.market_confidence:
+                best_picks.append((p.recommended_market, p.market_confidence, "match"))
+            if p.btts_confidence:
+                best_picks.append(("BTTS Yes" if p.btts_pick else "BTTS No", p.btts_confidence, "btts"))
+            if p.home_market_confidence:
+                best_picks.append((p.home_recommended_market, p.home_market_confidence, "home"))
+            if p.away_market_confidence:
+                best_picks.append((p.away_recommended_market, p.away_market_confidence, "away"))
+            if p.corner_confidence:
+                best_picks.append((f"{p.corner_recommended_pick} {p.corner_recommended_line} Corners", p.corner_confidence, "corner"))
+            if p.card_confidence:
+                best_picks.append((f"{p.card_recommended_pick} {p.card_recommended_line} Cards", p.card_confidence, "card"))
+
+            if best_picks:
+                best_label, best_conf, best_type = max(best_picks, key=lambda x: x[1])
+                bp_correct = None
+                if best_type == "btts":
+                    bp_correct = (actual_btts if p.btts_pick else not actual_btts)
+                elif best_type == "home":
+                    bp_correct = self._check_team_over_under(best_label, actual_h)
+                elif best_type == "away":
+                    bp_correct = self._check_team_over_under(best_label, actual_a)
+                elif best_type == "corner" and p.actual_total_corners is not None:
+                    is_over = "Over" in (p.corner_recommended_pick or "")
+                    if is_over:
+                        bp_correct = p.actual_total_corners > p.corner_recommended_line
+                    else:
+                        bp_correct = p.actual_total_corners < p.corner_recommended_line
+                elif best_type == "card" and p.actual_total_cards is not None:
+                    is_over = "Over" in (p.card_recommended_pick or "")
+                    if is_over:
+                        bp_correct = p.actual_total_cards > p.card_recommended_line
+                    else:
+                        bp_correct = p.actual_total_cards < p.card_recommended_line
+                elif best_type == "match":
+                    bp_correct = self._check_over_under(best_label, actual_total)
+
+                if bp_correct is not None:
+                    best_pick_total += 1
+                    if bp_correct:
+                        best_pick_correct += 1
+
         return {
             "total_predictions": total,
             "exact_score_accuracy": round(exact_score / total * 100, 1),
@@ -464,6 +510,7 @@ class PredictionService:
             "btts_accuracy": round(btts_correct / btts_total * 100, 1) if btts_total > 0 else None,
             "corner_line_accuracy": round(corner_line_correct / corner_line_total * 100, 1) if corner_line_total > 0 else None,
             "card_line_accuracy": round(card_line_correct / card_line_total * 100, 1) if card_line_total > 0 else None,
+            "best_pick_accuracy": round(best_pick_correct / best_pick_total * 100, 1) if best_pick_total > 0 else None,
         }
 
     async def update_actuals(self):

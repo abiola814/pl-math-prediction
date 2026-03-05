@@ -182,48 +182,27 @@ class TeamComparisonData(BaseModel):
     attributes: list[SpiderAttribute]
 
 
-class GameOfTheWeekMarket(BaseModel):
-    label: str
-    confidence: float
-
-
-class GameOfTheWeekResponse(BaseModel):
-    """The single best prediction of the gameweek with full forecast + result."""
+class GameOfTheWeekItem(BaseModel):
+    """One game in the Game of the Week list — best pick for that match."""
     fixture_api_id: int
     home_team: str
     away_team: str
     date: datetime
     matchday: Optional[int] = None
-
-    # Forecast
     predicted_home_goals: int
     predicted_away_goals: int
-    score_probability: float
-    top_scorelines: list[tuple[str, float]]
-
-    # Top 3 market picks (sorted by confidence)
-    top_markets: list[GameOfTheWeekMarket]
-
-    # Best single pick (the reason this game was chosen)
     best_pick_label: str
     best_pick_confidence: float
-
-    # BTTS
-    btts_recommendation: str
-    btts_confidence: float
-
-    # Corners
-    corner_pick: Optional[str] = None
-    corner_confidence: Optional[float] = None
-
-    # Cards
-    card_pick: Optional[str] = None
-    card_confidence: Optional[float] = None
-
-    # Result (null if match not yet played)
     actual_home_goals: Optional[int] = None
     actual_away_goals: Optional[int] = None
     is_finished: bool = False
-    result_correct: Optional[bool] = None
-    score_correct: Optional[bool] = None
-    markets_correct: Optional[list[MarketPick]] = None
+    pick_correct: Optional[bool] = None
+
+
+class GameOfTheWeekResponse(BaseModel):
+    """All games of the week with their best picks + accuracy summary."""
+    games: list[GameOfTheWeekItem]
+    total_games: int
+    finished_games: int
+    correct_picks: int
+    accuracy: Optional[float] = None

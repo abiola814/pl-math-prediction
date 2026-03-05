@@ -72,6 +72,17 @@ export default function AccuracyPage() {
         Based on {accuracy.total_predictions} completed predictions
       </p>
 
+      {/* Game of the Week — Best Pick accuracy */}
+      {accuracy.best_pick_accuracy !== null && accuracy.best_pick_accuracy !== undefined && (
+        <div className="bg-gradient-to-r from-purple-700 to-purple-900 rounded-xl shadow-lg p-6 text-center mb-8">
+          <p className="text-sm text-purple-300 mb-1">Game of the Week — Best Pick</p>
+          <p className="text-5xl font-bold text-white">{accuracy.best_pick_accuracy}%</p>
+          <p className="text-xs text-purple-300 mt-2">
+            Highest-confidence pick per match hit rate
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <AccuracyStat
           label="Exact Score"
@@ -110,6 +121,14 @@ export default function AccuracyPage() {
           How Accuracy Is Calculated
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+          <div>
+            <p className="font-medium text-gray-800">Best Pick (Game of the Week)</p>
+            <p>
+              For each match, the system selects the single highest-confidence
+              market pick (goals O/U, BTTS, home/away goals, corners, or
+              cards) and checks if it was correct.
+            </p>
+          </div>
           <div>
             <p className="font-medium text-gray-800">Exact Score</p>
             <p>

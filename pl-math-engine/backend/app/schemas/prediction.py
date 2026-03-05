@@ -108,6 +108,7 @@ class AccuracyResponse(BaseModel):
     btts_accuracy: Optional[float] = None
     corner_line_accuracy: Optional[float] = None
     card_line_accuracy: Optional[float] = None
+    best_pick_accuracy: Optional[float] = None
     message: Optional[str] = None
 
 
