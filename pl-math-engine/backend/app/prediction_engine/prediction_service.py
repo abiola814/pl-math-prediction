@@ -410,12 +410,17 @@ class PredictionService:
                 correct = self._check_over_under(p.recommended_market, actual_total)
                 picks.append((p.recommended_market, p.market_confidence, correct))
 
-            # BTTS
-            if p.btts_confidence and p.btts_confidence > self.CONFIDENCE_THRESHOLD:
-                actual_btts = actual_h > 0 and actual_a > 0
+            # BTTS — count when confidence >= 60%, OR when btts_yes < 51% (clear No)
+            actual_btts = actual_h > 0 and actual_a > 0
+            if p.btts_confidence and p.btts_confidence >= self.CONFIDENCE_THRESHOLD:
                 correct = (actual_btts if p.btts_pick else not actual_btts)
                 btts_total += 1
                 if correct:
+                    btts_correct += 1
+            elif p.btts_yes_prob is not None and p.btts_yes_prob < 0.51:
+                # Model leans BTTS No — count correct if No happened
+                btts_total += 1
+                if not actual_btts:
                     btts_correct += 1
 
             # Home team goals
