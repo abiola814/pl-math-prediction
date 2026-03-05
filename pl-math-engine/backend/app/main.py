@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.accuracy import router as accuracy_router
 from app.api.fixtures import router as fixtures_router
 from app.api.predictions import router as predictions_router
+from app.api.results import router as results_router
+from app.api.standings import router as standings_router
+from app.api.teams import router as teams_router
 from app.database import create_tables
 
 logging.basicConfig(
@@ -32,6 +35,9 @@ app.add_middleware(
 app.include_router(predictions_router)
 app.include_router(fixtures_router)
 app.include_router(accuracy_router)
+app.include_router(standings_router)
+app.include_router(teams_router)
+app.include_router(results_router)
 
 
 @app.on_event("startup")

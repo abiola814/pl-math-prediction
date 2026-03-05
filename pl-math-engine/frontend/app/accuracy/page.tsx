@@ -114,7 +114,11 @@ export default function AccuracyPage() {
             <p className="font-medium text-gray-800">Exact Score</p>
             <p>
               Predicted scoreline matches the actual result exactly (e.g.,
-              predicted 2-1, actual 2-1)
+              predicted 2-1, actual 2-1).{" "}
+              <span className="font-medium text-purple-700">
+                ~10% is typical — even the best models rarely exceed this.
+              </span>{" "}
+              The real value is in correct result and market picks.
             </p>
           </div>
           <div>
