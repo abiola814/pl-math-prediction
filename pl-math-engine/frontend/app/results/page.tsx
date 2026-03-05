@@ -66,14 +66,14 @@ function ResultBadge({
 }
 
 function MarketBadge({
-  market,
+  label,
+  confidence,
   correct,
 }: {
-  market: string | null;
+  label: string;
+  confidence: number;
   correct: boolean | null;
 }) {
-  if (!market) return <span className="text-gray-400 text-xs">-</span>;
-
   const bg =
     correct === true
       ? "bg-green-100 text-green-800"
@@ -85,7 +85,7 @@ function MarketBadge({
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${bg}`}
     >
-      {market}
+      {label} ({Math.round(confidence * 100)}%)
     </span>
   );
 }
@@ -141,7 +141,14 @@ export default function ResultsPage() {
   const withPredictions = results.filter((r) => r.predicted_home_goals !== null);
   const exactCount = withPredictions.filter((r) => r.score_correct).length;
   const resultCount = withPredictions.filter((r) => r.result_correct).length;
-  const marketCount = withPredictions.filter((r) => r.market_correct === true).length;
+
+  // Count all market picks that have been evaluated (correct !== null)
+  const allMarkets = withPredictions.flatMap((r) => r.markets || []);
+  const evaluatedMarkets = allMarkets.filter((m) => m.correct !== null);
+  const correctMarkets = evaluatedMarkets.filter((m) => m.correct === true);
+  const marketHitRate = evaluatedMarkets.length > 0
+    ? Math.round((correctMarkets.length / evaluatedMarkets.length) * 100)
+    : 0;
 
   return (
     <div>
@@ -169,9 +176,12 @@ export default function ResultsPage() {
             </div>
             <div className="bg-white rounded-xl shadow-md p-2.5 sm:p-4 text-center">
               <p className="text-lg sm:text-2xl font-bold text-blue-600">
-                {Math.round((marketCount / withPredictions.length) * 100)}%
+                {marketHitRate}%
               </p>
               <p className="text-[10px] sm:text-xs text-gray-500">Market Hit</p>
+              <p className="text-[10px] text-gray-400 mt-1 hidden sm:block">
+                {correctMarkets.length}/{evaluatedMarkets.length} picks
+              </p>
             </div>
           </div>
           <p className="text-xs text-gray-400 text-center">
@@ -194,7 +204,7 @@ export default function ResultsPage() {
                 <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-center hidden sm:table-cell">Predicted</th>
                 <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-center">Result</th>
                 <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-center hidden sm:table-cell">Accuracy</th>
-                <th className="px-3 py-3 text-center hidden md:table-cell">Market</th>
+                <th className="px-3 py-3 text-left hidden md:table-cell">Markets</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -238,11 +248,16 @@ export default function ResultsPage() {
                       <span className="text-gray-400 text-xs">No prediction</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-center hidden md:table-cell">
-                    <MarketBadge
-                      market={r.recommended_market}
-                      correct={r.market_correct}
-                    />
+                  <td className="px-3 py-3 hidden md:table-cell">
+                    {r.markets && r.markets.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {r.markets.map((m, i) => (
+                          <MarketBadge key={i} label={m.label} confidence={m.confidence} correct={m.correct} />
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-xs">-</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -223,6 +223,12 @@ export interface FormHistoryPoint {
   cumulative_goals_against: number;
 }
 
+export interface MarketPick {
+  label: string;
+  confidence: number;
+  correct: boolean | null;
+}
+
 export interface ResultWithPrediction {
   fixture_api_id: number;
   home_team: string;
@@ -239,6 +245,7 @@ export interface ResultWithPrediction {
   result_correct: boolean;
   recommended_market: string | null;
   market_correct: boolean | null;
+  markets: MarketPick[];
 }
 
 // ── Analysis Types ──────────────────────────────────────────

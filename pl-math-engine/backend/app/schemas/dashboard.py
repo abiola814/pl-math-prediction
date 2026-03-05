@@ -112,6 +112,12 @@ class FormHistoryPoint(BaseModel):
     cumulative_goals_against: int
 
 
+class MarketPick(BaseModel):
+    label: str            # e.g. "Over 2.5 Goals", "BTTS Yes", "Over 9.5 Corners"
+    confidence: float = 0.0
+    correct: Optional[bool] = None
+
+
 class ResultWithPrediction(BaseModel):
     fixture_api_id: int
     home_team: str
@@ -128,6 +134,7 @@ class ResultWithPrediction(BaseModel):
     result_correct: bool
     recommended_market: Optional[str] = None
     market_correct: Optional[bool] = None
+    markets: list[MarketPick] = []
 
 
 # ── Analysis Schemas ───────────────────────────────────────────

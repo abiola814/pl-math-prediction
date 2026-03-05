@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.fixture import Fixture
 from app.models.prediction import Prediction
-from app.schemas.dashboard import ResultWithPrediction
+from app.schemas.dashboard import MarketPick, ResultWithPrediction
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,28 @@ def _get_result(home_goals: int, away_goals: int) -> str:
     elif away_goals > home_goals:
         return "A"
     return "D"
+
+
+def _check_over_under(market: str, actual_total: int) -> bool | None:
+    """Check if an Over/Under market pick was correct."""
+    for line in ["3.5", "2.5", "1.5", "0.5"]:
+        threshold = float(line)
+        if f"Over {line}" in market:
+            return actual_total > threshold
+        if f"Under {line}" in market:
+            return actual_total < threshold
+    return None
+
+
+def _check_team_over_under(market: str, team_goals: int) -> bool | None:
+    """Check if a team-level Over/Under pick was correct."""
+    for line in ["2.5", "1.5", "0.5"]:
+        threshold = float(line)
+        if f"Over {line}" in market:
+            return team_goals > threshold
+        if f"Under {line}" in market:
+            return team_goals < threshold
+    return None
 
 
 @router.get("/", response_model=list[ResultWithPrediction])
@@ -60,6 +82,8 @@ async def get_results(limit: int = 20, db: Session = Depends(get_db)):
         recommended_market = None
         market_correct = None
 
+        markets: list[MarketPick] = []
+
         if pred:
             predicted_result = _get_result(pred.predicted_home_goals, pred.predicted_away_goals)
             score_correct = (
@@ -68,26 +92,80 @@ async def get_results(limit: int = 20, db: Session = Depends(get_db)):
             )
             result_correct = predicted_result == actual_result
             recommended_market = pred.recommended_market
+            actual_total = actual_home + actual_away
 
-            # Check if market recommendation was correct
+            # Check if main market recommendation was correct
             if recommended_market:
-                actual_total = actual_home + actual_away
-                if "Over 3.5" in recommended_market:
-                    market_correct = actual_total > 3.5
-                elif "Under 3.5" in recommended_market:
-                    market_correct = actual_total < 3.5
-                elif "Over 2.5" in recommended_market:
-                    market_correct = actual_total > 2.5
-                elif "Under 2.5" in recommended_market:
-                    market_correct = actual_total < 2.5
-                elif "Over 1.5" in recommended_market:
-                    market_correct = actual_total > 1.5
-                elif "Under 1.5" in recommended_market:
-                    market_correct = actual_total < 1.5
-                elif "Over 0.5" in recommended_market:
-                    market_correct = actual_total > 0.5
-                elif "Under 0.5" in recommended_market:
-                    market_correct = actual_total < 0.5
+                market_correct = _check_over_under(recommended_market, actual_total)
+
+            # Build all market picks with confidence, then take top 3
+            all_picks: list[MarketPick] = []
+
+            # 1) Match goals
+            all_picks.append(MarketPick(
+                label=pred.recommended_market,
+                confidence=pred.market_confidence or 0,
+                correct=_check_over_under(pred.recommended_market, actual_total),
+            ))
+
+            # 2) BTTS
+            btts_label = "BTTS Yes" if pred.btts_pick else "BTTS No"
+            btts_actual = actual_home >= 1 and actual_away >= 1
+            all_picks.append(MarketPick(
+                label=btts_label,
+                confidence=pred.btts_confidence or 0,
+                correct=(btts_actual if pred.btts_pick else not btts_actual),
+            ))
+
+            # 3) Home team goals
+            if pred.home_recommended_market:
+                all_picks.append(MarketPick(
+                    label=pred.home_recommended_market,
+                    confidence=pred.home_market_confidence or 0,
+                    correct=_check_team_over_under(pred.home_recommended_market, actual_home),
+                ))
+
+            # 4) Away team goals
+            if pred.away_recommended_market:
+                all_picks.append(MarketPick(
+                    label=pred.away_recommended_market,
+                    confidence=pred.away_market_confidence or 0,
+                    correct=_check_team_over_under(pred.away_recommended_market, actual_away),
+                ))
+
+            # 5) Corners
+            if pred.corner_recommended_pick:
+                corner_label = f"{pred.corner_recommended_pick} {pred.corner_recommended_line} Corners"
+                corner_correct = None
+                if pred.actual_total_corners is not None:
+                    if "Over" in pred.corner_recommended_pick:
+                        corner_correct = pred.actual_total_corners > pred.corner_recommended_line
+                    else:
+                        corner_correct = pred.actual_total_corners < pred.corner_recommended_line
+                all_picks.append(MarketPick(
+                    label=corner_label,
+                    confidence=pred.corner_confidence or 0,
+                    correct=corner_correct,
+                ))
+
+            # 6) Cards
+            if pred.card_recommended_pick:
+                card_label = f"{pred.card_recommended_pick} {pred.card_recommended_line} Cards"
+                card_correct = None
+                if pred.actual_total_cards is not None:
+                    if "Over" in pred.card_recommended_pick:
+                        card_correct = pred.actual_total_cards > pred.card_recommended_line
+                    else:
+                        card_correct = pred.actual_total_cards < pred.card_recommended_line
+                all_picks.append(MarketPick(
+                    label=card_label,
+                    confidence=pred.card_confidence or 0,
+                    correct=card_correct,
+                ))
+
+            # Sort by confidence and take top 3
+            all_picks.sort(key=lambda m: m.confidence, reverse=True)
+            markets = all_picks[:3]
 
         result.append(ResultWithPrediction(
             fixture_api_id=fix.api_id,
@@ -105,6 +183,7 @@ async def get_results(limit: int = 20, db: Session = Depends(get_db)):
             result_correct=result_correct,
             recommended_market=recommended_market,
             market_correct=market_correct,
+            markets=markets,
         ))
 
     return result

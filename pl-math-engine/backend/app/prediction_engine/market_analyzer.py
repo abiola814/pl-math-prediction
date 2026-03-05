@@ -154,21 +154,46 @@ class MarketAnalyzer:
     ) -> tuple[str, float]:
         """Pick the best Over/Under line for match goals.
 
-        For each goal line (3.5, 2.5, 1.5), picks whichever side
-        (Over or Under) has the highest probability. Then selects
-        the overall most confident recommendation.
+        Uses the expected goal total (derived from probabilities) to choose the
+        most relevant line, then picks Over or Under based on which side has
+        stronger probability. This avoids always picking trivial lines like
+        Over 1.5 which hit ~85% of matches.
+
+        Strategy: pick the line where the probability is furthest from 50%
+        (strongest edge), but only from meaningful lines (2.5 and 3.5).
+        Fall back to 1.5 only in low-scoring match scenarios.
         """
-        candidates = [
-            ("Over 3.5 Goals", over_35),
-            ("Under 3.5 Goals", 1.0 - over_35),
-            ("Over 2.5 Goals", over_25),
-            ("Under 2.5 Goals", 1.0 - over_25),
-            ("Over 1.5 Goals", over_15),
-            ("Under 1.5 Goals", 1.0 - over_15),
+        # For each line, compute the "edge" = |prob - 0.5|
+        # Higher edge = more confident pick
+        lines = [
+            ("Over 3.5 Goals", over_35, "Under 3.5 Goals", 1.0 - over_35),
+            ("Over 2.5 Goals", over_25, "Under 2.5 Goals", 1.0 - over_25),
+            ("Over 1.5 Goals", over_15, "Under 1.5 Goals", 1.0 - over_15),
         ]
 
-        # Pick the candidate with the highest probability (most confident)
-        best_label, best_prob = max(candidates, key=lambda c: c[1])
+        best_label = "Over 2.5 Goals"
+        best_prob = over_25
+        best_edge = 0.0
+
+        for over_label, over_prob, under_label, under_prob in lines:
+            # Pick the stronger side for this line
+            if over_prob >= under_prob:
+                label, prob = over_label, over_prob
+            else:
+                label, prob = under_label, under_prob
+
+            edge = abs(prob - 0.5)
+
+            # Prefer 2.5 and 3.5 lines over 1.5 (more useful picks)
+            # Only use 1.5 if it has a much stronger edge
+            if "1.5" in label:
+                edge *= 0.7  # discount trivial lines
+
+            if edge > best_edge:
+                best_edge = edge
+                best_label = label
+                best_prob = prob
+
         return best_label, best_prob
 
     def _select_team_market(
