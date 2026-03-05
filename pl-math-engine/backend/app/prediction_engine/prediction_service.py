@@ -337,8 +337,35 @@ class PredictionService:
                 logger.error(f"Failed to predict {fixture.home_team_name} vs {fixture.away_team_name}: {e}")
         return predictions
 
+    # Minimum confidence threshold — only count picks above this
+    CONFIDENCE_THRESHOLD = 0.60
+
+    def _check_over_under(self, market: str, actual_total: int) -> bool | None:
+        """Check if an Over/Under market pick was correct."""
+        for line in ["3.5", "2.5", "1.5", "0.5"]:
+            threshold = float(line)
+            if f"Over {line}" in market:
+                return actual_total > threshold
+            if f"Under {line}" in market:
+                return actual_total < threshold
+        return None
+
+    def _check_team_over_under(self, market: str, team_goals: int) -> bool | None:
+        """Check if a team-level Over/Under pick was correct."""
+        for line in ["2.5", "1.5", "0.5"]:
+            threshold = float(line)
+            if f"Over {line}" in market:
+                return team_goals > threshold
+            if f"Under {line}" in market:
+                return team_goals < threshold
+        return None
+
     def compute_accuracy(self) -> dict:
-        """Compute accuracy metrics across all stored predictions with actual results."""
+        """Compute accuracy metrics across all stored predictions with actual results.
+
+        Over/Under accuracy uses the top 3 highest-confidence market picks
+        per match (only picks with confidence > 60%).
+        """
         predictions = (
             self.db.query(Prediction)
             .filter(Prediction.actual_home_goals.isnot(None))
@@ -351,9 +378,13 @@ class PredictionService:
         total = len(predictions)
         exact_score = 0
         correct_result = 0
+        over_under_total = 0
         over_under_correct = 0
+        btts_total = 0
         btts_correct = 0
+        corner_line_total = 0
         corner_line_correct = 0
+        card_line_total = 0
         card_line_correct = 0
 
         for p in predictions:
@@ -361,50 +392,78 @@ class PredictionService:
             actual_a = p.actual_away_goals
             actual_total = actual_h + actual_a
 
+            # Exact score
             if p.predicted_home_goals == actual_h and p.predicted_away_goals == actual_a:
                 exact_score += 1
 
+            # Correct result (H/D/A)
             pred_result = "H" if p.predicted_home_goals > p.predicted_away_goals else ("A" if p.predicted_away_goals > p.predicted_home_goals else "D")
             actual_result = "H" if actual_h > actual_a else ("A" if actual_a > actual_h else "D")
             if pred_result == actual_result:
                 correct_result += 1
 
-            market = p.recommended_market
-            if "Over" in market:
-                line = float(market.split()[-2])
-                if actual_total > line:
-                    over_under_correct += 1
-            elif "Under" in market:
-                line = float(market.split()[-2])
-                if actual_total < line:
-                    over_under_correct += 1
+            # Build all market picks with confidence (same logic as results endpoint)
+            picks: list[tuple[str, float, bool | None]] = []  # (label, confidence, correct)
 
-            actual_btts = actual_h > 0 and actual_a > 0
-            if p.btts_pick == actual_btts:
-                btts_correct += 1
+            # Match goals
+            if p.market_confidence and p.market_confidence > self.CONFIDENCE_THRESHOLD:
+                correct = self._check_over_under(p.recommended_market, actual_total)
+                picks.append((p.recommended_market, p.market_confidence, correct))
 
+            # BTTS
+            if p.btts_confidence and p.btts_confidence > self.CONFIDENCE_THRESHOLD:
+                actual_btts = actual_h > 0 and actual_a > 0
+                correct = (actual_btts if p.btts_pick else not actual_btts)
+                btts_total += 1
+                if correct:
+                    btts_correct += 1
+
+            # Home team goals
+            if p.home_recommended_market and p.home_market_confidence and p.home_market_confidence > self.CONFIDENCE_THRESHOLD:
+                correct = self._check_team_over_under(p.home_recommended_market, actual_h)
+                picks.append((p.home_recommended_market, p.home_market_confidence, correct))
+
+            # Away team goals
+            if p.away_recommended_market and p.away_market_confidence and p.away_market_confidence > self.CONFIDENCE_THRESHOLD:
+                correct = self._check_team_over_under(p.away_recommended_market, actual_a)
+                picks.append((p.away_recommended_market, p.away_market_confidence, correct))
+
+            # Sort by confidence, take top 3 Over/Under picks
+            picks.sort(key=lambda x: x[1], reverse=True)
+            for label, conf, correct in picks[:3]:
+                if correct is not None:
+                    over_under_total += 1
+                    if correct:
+                        over_under_correct += 1
+
+            # Corners (separate metric, still uses 60% threshold)
             if p.actual_total_corners is not None and p.corner_recommended_line:
-                is_over = "Over" in (p.corner_recommended_pick or "")
-                if is_over and p.actual_total_corners > p.corner_recommended_line:
-                    corner_line_correct += 1
-                elif not is_over and p.actual_total_corners < p.corner_recommended_line:
-                    corner_line_correct += 1
+                if p.corner_confidence and p.corner_confidence > self.CONFIDENCE_THRESHOLD:
+                    corner_line_total += 1
+                    is_over = "Over" in (p.corner_recommended_pick or "")
+                    if is_over and p.actual_total_corners > p.corner_recommended_line:
+                        corner_line_correct += 1
+                    elif not is_over and p.actual_total_corners < p.corner_recommended_line:
+                        corner_line_correct += 1
 
+            # Cards (separate metric, still uses 60% threshold)
             if p.actual_total_cards is not None and p.card_recommended_line:
-                is_over = "Over" in (p.card_recommended_pick or "")
-                if is_over and p.actual_total_cards > p.card_recommended_line:
-                    card_line_correct += 1
-                elif not is_over and p.actual_total_cards < p.card_recommended_line:
-                    card_line_correct += 1
+                if p.card_confidence and p.card_confidence > self.CONFIDENCE_THRESHOLD:
+                    card_line_total += 1
+                    is_over = "Over" in (p.card_recommended_pick or "")
+                    if is_over and p.actual_total_cards > p.card_recommended_line:
+                        card_line_correct += 1
+                    elif not is_over and p.actual_total_cards < p.card_recommended_line:
+                        card_line_correct += 1
 
         return {
             "total_predictions": total,
             "exact_score_accuracy": round(exact_score / total * 100, 1),
             "result_accuracy": round(correct_result / total * 100, 1),
-            "over_under_accuracy": round(over_under_correct / total * 100, 1),
-            "btts_accuracy": round(btts_correct / total * 100, 1),
-            "corner_line_accuracy": round(corner_line_correct / total * 100, 1) if any(p.actual_total_corners is not None for p in predictions) else None,
-            "card_line_accuracy": round(card_line_correct / total * 100, 1) if any(p.actual_total_cards is not None for p in predictions) else None,
+            "over_under_accuracy": round(over_under_correct / over_under_total * 100, 1) if over_under_total > 0 else None,
+            "btts_accuracy": round(btts_correct / btts_total * 100, 1) if btts_total > 0 else None,
+            "corner_line_accuracy": round(corner_line_correct / corner_line_total * 100, 1) if corner_line_total > 0 else None,
+            "card_line_accuracy": round(card_line_correct / card_line_total * 100, 1) if card_line_total > 0 else None,
         }
 
     async def update_actuals(self):
