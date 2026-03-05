@@ -74,12 +74,20 @@ async def get_results(limit: int = 20, db: Session = Depends(get_db)):
                 actual_total = actual_home + actual_away
                 if "Over 3.5" in recommended_market:
                     market_correct = actual_total > 3.5
+                elif "Under 3.5" in recommended_market:
+                    market_correct = actual_total < 3.5
                 elif "Over 2.5" in recommended_market:
                     market_correct = actual_total > 2.5
+                elif "Under 2.5" in recommended_market:
+                    market_correct = actual_total < 2.5
                 elif "Over 1.5" in recommended_market:
                     market_correct = actual_total > 1.5
+                elif "Under 1.5" in recommended_market:
+                    market_correct = actual_total < 1.5
                 elif "Over 0.5" in recommended_market:
                     market_correct = actual_total > 0.5
+                elif "Under 0.5" in recommended_market:
+                    market_correct = actual_total < 0.5
 
         result.append(ResultWithPrediction(
             fixture_api_id=fix.api_id,

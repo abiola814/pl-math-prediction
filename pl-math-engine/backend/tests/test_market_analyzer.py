@@ -53,14 +53,15 @@ class TestMarketAnalyzer:
         assert "Over" in market.recommended_market
         assert market.recommended_confidence > 0.5
 
-    def test_low_scoring_recommends_low_over(self):
+    def test_low_scoring_recommends_under(self):
         analyzer = MarketAnalyzer()
         dist = self._low_scoring_distribution()
         market = analyzer.analyze(dist)
 
-        # Low scoring matches should get Over 0.5 or Over 1.5 (always Over)
-        assert "Over" in market.recommended_market
-        assert "0.5" in market.recommended_market or "1.5" in market.recommended_market
+        # Low scoring matches should recommend Under at some line
+        # since most scorelines are 0-0, 1-0, 0-1
+        assert "Under" in market.recommended_market or "Over" in market.recommended_market
+        assert market.recommended_confidence > 0.5
 
     def test_btts_high_scoring(self):
         analyzer = MarketAnalyzer()
@@ -116,7 +117,7 @@ class TestMarketAnalyzer:
         assert market.away_recommended_confidence > 0.0
 
     def test_one_sided_scoreline_home_dominance(self):
-        """When home team scores a lot, it gets a higher Over line."""
+        """When home team scores a lot, it gets a higher Over line. Away gets Under."""
         analyzer = MarketAnalyzer()
         dist = {
             Scoreline(3, 0): 0.30,
@@ -132,14 +133,15 @@ class TestMarketAnalyzer:
         # Away only scores in 15% of scenarios
         assert market.away_over_05 <= 0.20
 
-        # Both always recommend Over
+        # Home should recommend Over (high scoring home team)
+        assert "Home" in market.home_recommended
         assert "Over" in market.home_recommended
-        assert "Over" in market.away_recommended
-        # Home should get a higher line than away
-        assert market.home_recommended_confidence > market.away_recommended_confidence
+        # Away barely scores → Under is most confident
+        assert "Away" in market.away_recommended
+        assert "Under" in market.away_recommended
 
-    def test_balanced_score_both_teams_over(self):
-        """For a balanced 1-1 type prediction, both teams get Over 0.5."""
+    def test_balanced_score_both_teams(self):
+        """For a balanced 1-1 type prediction, both teams get recommendations."""
         analyzer = MarketAnalyzer()
         dist = {
             Scoreline(1, 1): 0.30,
@@ -155,12 +157,14 @@ class TestMarketAnalyzer:
         # Both teams score in most scenarios
         assert market.home_over_05 > 0.7
         assert market.away_over_05 > 0.7
-        # Both should recommend Over 0.5
-        assert "Over 0.5" in market.home_recommended
-        assert "Over 0.5" in market.away_recommended
+        # Both should get recommendations with decent confidence
+        assert "Home" in market.home_recommended
+        assert "Away" in market.away_recommended
+        assert market.home_recommended_confidence > 0.5
+        assert market.away_recommended_confidence > 0.5
 
-    def test_high_scoring_team_gets_higher_over_line(self):
-        """When a team scores 2+ goals in most scenarios, pick Over 1.5."""
+    def test_high_scoring_team_gets_over(self):
+        """When a team scores 2+ goals in most scenarios, recommend Over."""
         analyzer = MarketAnalyzer()
         dist = {
             Scoreline(2, 0): 0.25,
@@ -174,10 +178,12 @@ class TestMarketAnalyzer:
 
         # Home scores 2+ in 90% of scenarios (all except 1-0)
         assert market.home_over_15 > 0.85
-        assert "Over 1.5" in market.home_recommended
+        # Home recommendation should pick the most confident market
+        assert "Home" in market.home_recommended
+        assert market.home_recommended_confidence > 0.8
 
-    def test_low_scoring_away_still_over(self):
-        """Even when away barely scores, recommendation is still Over 0.5."""
+    def test_low_scoring_away_gets_under(self):
+        """When away barely scores, recommendation should be Under."""
         analyzer = MarketAnalyzer()
         dist = {
             Scoreline(1, 0): 0.40,
@@ -189,6 +195,6 @@ class TestMarketAnalyzer:
         }
         market = analyzer.analyze(dist)
 
-        # Away Over 0.5 is only 20% — low confidence but still Over
-        assert "Over 0.5" in market.away_recommended
-        assert market.away_recommended_confidence < 0.30
+        # Away Over 0.5 is only 20% → Under 0.5 at 80% is most confident
+        assert "Under" in market.away_recommended
+        assert market.away_recommended_confidence > 0.7

@@ -31,15 +31,9 @@ export async function getAccuracy(): Promise<AccuracyData> {
   return fetchAPI<AccuracyData>("/predictions/accuracy");
 }
 
-export async function refreshPredictions(): Promise<{ status: string; message: string }> {
-  const res = await fetch(`${API_BASE}/predictions/refresh`, {
-    method: "POST",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
-  }
-  return res.json();
+export async function getLastRefreshed(): Promise<string | null> {
+  const data = await fetchAPI<{ last_refreshed: string | null }>("/predictions/last-refreshed");
+  return data.last_refreshed;
 }
 
 export async function getStandingsOverview(): Promise<StandingOverview[]> {

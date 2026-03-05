@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.accuracy import router as accuracy_router
+from app.api.cron import router as cron_router
 from app.api.fixtures import router as fixtures_router
 from app.api.predictions import router as predictions_router
 from app.api.results import router as results_router
@@ -43,6 +44,7 @@ app.include_router(accuracy_router)
 app.include_router(standings_router)
 app.include_router(teams_router)
 app.include_router(results_router)
+app.include_router(cron_router)
 
 
 @app.on_event("startup")

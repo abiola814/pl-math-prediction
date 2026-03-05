@@ -1,9 +1,11 @@
 """Prediction API endpoints."""
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.prediction import Prediction as PredictionModel
 from app.prediction_engine.prediction_service import PredictionService
 from app.schemas.prediction import AccuracyResponse, PredictionResponse, RefreshResponse, ScorelineSchema, MarketSchema, CornerSchema, CardSchema, LLMVerdictSchema
 
@@ -102,6 +104,13 @@ async def get_upcoming_predictions(db: Session = Depends(get_db)):
     service = PredictionService(db)
     predictions = await service.predict_upcoming()
     return [_to_response(p) for p in predictions]
+
+
+@router.get("/last-refreshed")
+async def get_last_refreshed(db: Session = Depends(get_db)):
+    """Return the timestamp of the most recent prediction."""
+    latest = db.query(func.max(PredictionModel.created_at)).scalar()
+    return {"last_refreshed": latest.isoformat() if latest else None}
 
 
 @router.post("/refresh", response_model=RefreshResponse)

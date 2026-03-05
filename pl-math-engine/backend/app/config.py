@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     HOME_GAMES_THRESHOLD: int = 6
     PANDEMIC_YEAR: int = 2020
 
+    # Cron job authentication
+    CRON_SECRET: str = ""
+
     # LLM adjustment bounds
     LLM_MAX_ADJUSTMENT: float = 0.15
 

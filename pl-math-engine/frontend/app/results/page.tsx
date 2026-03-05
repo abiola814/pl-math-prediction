@@ -32,6 +32,39 @@ function AccuracyBadge({
   );
 }
 
+const resultLabels: Record<string, string> = {
+  H: "Home",
+  D: "Draw",
+  A: "Away",
+};
+
+const resultBadgeColors: Record<string, string> = {
+  H: "bg-blue-100 text-blue-800",
+  D: "bg-gray-100 text-gray-700",
+  A: "bg-orange-100 text-orange-800",
+};
+
+function ResultBadge({
+  predicted,
+  actual,
+}: {
+  predicted: string | null;
+  actual: string;
+}) {
+  if (!predicted) return <span className="text-gray-400 text-xs">-</span>;
+
+  const isCorrect = predicted === actual;
+  const border = isCorrect ? "ring-2 ring-green-400" : "ring-2 ring-red-300";
+
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${resultBadgeColors[predicted] || "bg-gray-100 text-gray-600"} ${border}`}
+    >
+      {resultLabels[predicted] || predicted}
+    </span>
+  );
+}
+
 function MarketBadge({
   market,
   correct,
@@ -159,7 +192,8 @@ export default function ResultsPage() {
                 <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-left">Match</th>
                 <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-center">Actual</th>
                 <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-center hidden sm:table-cell">Predicted</th>
-                <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-center">Accuracy</th>
+                <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-center">Result</th>
+                <th className="px-1.5 sm:px-3 py-2 sm:py-3 text-center hidden sm:table-cell">Accuracy</th>
                 <th className="px-3 py-3 text-center hidden md:table-cell">Market</th>
               </tr>
             </thead>
@@ -189,6 +223,12 @@ export default function ResultsPage() {
                       : "-"}
                   </td>
                   <td className="px-1.5 sm:px-3 py-2 sm:py-3 text-center">
+                    <ResultBadge
+                      predicted={r.predicted_result}
+                      actual={r.actual_result}
+                    />
+                  </td>
+                  <td className="px-1.5 sm:px-3 py-2 sm:py-3 text-center hidden sm:table-cell">
                     {r.predicted_home_goals !== null ? (
                       <AccuracyBadge
                         scoreCorrect={r.score_correct}

@@ -152,19 +152,24 @@ class MarketAnalyzer:
         over_25: float,
         over_35: float,
     ) -> tuple[str, float]:
-        """Pick the best Over line for match goals.
+        """Pick the best Over/Under line for match goals.
 
-        Always recommends Over — picks the highest line where the
-        probability is 50%+, giving the best value bet.
+        For each goal line (3.5, 2.5, 1.5), picks whichever side
+        (Over or Under) has the highest probability. Then selects
+        the overall most confident recommendation.
         """
-        if over_35 >= 0.50:
-            return "Over 3.5 Goals", over_35
-        if over_25 >= 0.50:
-            return "Over 2.5 Goals", over_25
-        if over_15 >= 0.50:
-            return "Over 1.5 Goals", over_15
-        # Default to Over 0.5
-        return "Over 0.5 Goals", over_05
+        candidates = [
+            ("Over 3.5 Goals", over_35),
+            ("Under 3.5 Goals", 1.0 - over_35),
+            ("Over 2.5 Goals", over_25),
+            ("Under 2.5 Goals", 1.0 - over_25),
+            ("Over 1.5 Goals", over_15),
+            ("Under 1.5 Goals", 1.0 - over_15),
+        ]
+
+        # Pick the candidate with the highest probability (most confident)
+        best_label, best_prob = max(candidates, key=lambda c: c[1])
+        return best_label, best_prob
 
     def _select_team_market(
         self,
@@ -173,24 +178,21 @@ class MarketAnalyzer:
         over_15: float,
         over_25: float,
     ) -> tuple[str, float]:
-        """Pick the best Over line for a specific team's goals.
+        """Pick the best Over/Under line for a specific team's goals.
 
-        Always recommends Over — picks the highest line where probability
-        exceeds the threshold, giving the best value bet.
-
-        Example: Man City 1-0 Arsenal
-          home_over_05=0.75, home_over_15=0.25
-          → Home Over 0.5 Goals (75%)
-          away_over_05=0.20
-          → Away Over 0.5 Goals (20%) — low confidence but still Over
+        For each line, picks whichever side has the highest probability.
         """
-        # Pick the highest Over line with sufficient confidence
-        if over_25 >= 0.50:
-            return f"{side} Over 2.5 Goals", over_25
-        if over_15 >= 0.50:
-            return f"{side} Over 1.5 Goals", over_15
-        # Default to Over 0.5
-        return f"{side} Over 0.5 Goals", over_05
+        candidates = [
+            (f"{side} Over 2.5 Goals", over_25),
+            (f"{side} Under 2.5 Goals", 1.0 - over_25),
+            (f"{side} Over 1.5 Goals", over_15),
+            (f"{side} Under 1.5 Goals", 1.0 - over_15),
+            (f"{side} Over 0.5 Goals", over_05),
+            (f"{side} Under 0.5 Goals", 1.0 - over_05),
+        ]
+
+        best_label, best_prob = max(candidates, key=lambda c: c[1])
+        return best_label, best_prob
 
     def _determine_btts(self, btts_yes: float) -> tuple[str, float]:
         """Determine BTTS recommendation."""
