@@ -2,7 +2,6 @@
 
 import "./globals.css";
 import Logo from "@/components/Logo";
-import GameOfTheWeek from "@/components/GameOfTheWeek";
 import { useState } from "react";
 
 export default function RootLayout({
@@ -125,7 +124,6 @@ export default function RootLayout({
         <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
           {children}
         </main>
-        <GameOfTheWeek />
       </body>
     </html>
   );

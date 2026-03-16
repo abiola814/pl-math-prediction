@@ -40,6 +40,7 @@ class CornerSchema(BaseModel):
     predicted_total: float
     home_corners: float
     away_corners: float
+    over_65: float
     over_85: float
     over_95: float
     over_105: float

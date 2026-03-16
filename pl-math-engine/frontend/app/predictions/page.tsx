@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Prediction } from "@/lib/types";
 import { getUpcomingPredictions, getLastRefreshed } from "@/lib/api";
 import PredictionCard from "@/components/PredictionCard";
+import GameOfTheWeek from "@/components/GameOfTheWeek";
 
 export default function PredictionsPage() {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
@@ -58,6 +59,8 @@ export default function PredictionsPage() {
           </p>
         )}
       </div>
+
+      <GameOfTheWeek />
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">

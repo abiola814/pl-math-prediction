@@ -20,6 +20,7 @@ class CornerPrediction:
     predicted_total: float
     home_corners: float
     away_corners: float
+    over_65: float
     over_85: float
     over_95: float
     over_105: float
@@ -57,12 +58,15 @@ class CornerPredictor:
         home_corners = self._apply_form_adjustment(home_corners, home_form)
         away_corners = self._apply_form_adjustment(away_corners, away_form)
 
-        # Rating mismatch adjustment: bigger mismatches produce more corners
-        # (dominant team attacks, weaker team counters)
+        # Rating mismatch: stronger team wins more corners (attacking dominance),
+        # weaker team gets slightly fewer (sitting deeper, conceding possession)
         rating_diff = abs(home_rating - away_rating)
-        mismatch_factor = 1.0 + rating_diff * 0.1  # Up to ~10% more corners
-        home_corners *= mismatch_factor
-        away_corners *= mismatch_factor
+        if home_rating > away_rating:
+            home_corners *= 1.0 + rating_diff * 0.15  # Stronger team pushes forward
+            away_corners *= 1.0 - rating_diff * 0.05  # Weaker team sits deeper
+        elif away_rating > home_rating:
+            away_corners *= 1.0 + rating_diff * 0.15
+            home_corners *= 1.0 - rating_diff * 0.05
 
         predicted_total = home_corners + away_corners
 
@@ -76,6 +80,7 @@ class CornerPredictor:
             predicted_total=round(predicted_total, 1),
             home_corners=round(home_corners, 1),
             away_corners=round(away_corners, 1),
+            over_65=round(over_under.get(6.5, 0.5), 4),
             over_85=round(over_under.get(8.5, 0.5), 4),
             over_95=round(over_under.get(9.5, 0.5), 4),
             over_105=round(over_under.get(10.5, 0.5), 4),
@@ -110,9 +115,9 @@ class CornerPredictor:
     def _apply_form_adjustment(corners: float, form: float) -> float:
         """Better form (> 0.5) means more attacking, more corners.
 
-        form=0.5 → no change, form=1.0 → +10%, form=0.0 → -10%
+        form=0.5 → no change, form=1.0 → +15%, form=0.0 → -15%
         """
-        adjustment = 1.0 + (form - 0.5) * 0.2
+        adjustment = 1.0 + (form - 0.5) * 0.3
         return corners * adjustment
 
     @staticmethod
@@ -122,7 +127,7 @@ class CornerPredictor:
         Corners roughly follow a Poisson distribution, making this a
         principled approach for over/under calculations.
         """
-        lines = [7.5, 8.5, 9.5, 10.5, 11.5, 12.5]
+        lines = [6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5]
         result = {}
         for line in lines:
             # P(X > line) = 1 - P(X <= floor(line)) = 1 - CDF(floor(line))
@@ -133,19 +138,23 @@ class CornerPredictor:
     def _select_best_line(
         over_under: dict[float, float],
     ) -> tuple[float, str, float]:
-        """Pick the best Over corner line.
+        """Pick the safest Over corner line with good value.
 
-        Always recommends Over — picks the highest line where
-        probability is 50%+.
+        Prefers the safest viable line — only recommends a higher
+        line if confidence is very strong (65%+).
         """
-        best_line = 7.5  # Default fallback
-        best_pick = "Over 7.5"
-        best_conf = over_under.get(7.5, 0.5)
-
-        # Check lines from highest to lowest, pick highest with 50%+
-        for line in sorted(over_under.keys(), reverse=True):
+        # Start from safest line and only go higher if very confident
+        for line in sorted(over_under.keys()):
             over_prob = over_under[line]
-            if over_prob >= 0.50:
+            if over_prob >= 0.55:
+                # Check if a higher line has strong enough confidence
+                next_lines = [l for l in sorted(over_under.keys()) if l > line]
+                for next_line in next_lines:
+                    if over_under[next_line] >= 0.65:
+                        line = next_line
+                        over_prob = over_under[next_line]
+                    else:
+                        break
                 return line, f"Over {line}", over_prob
 
         # Fallback: pick the lowest line (most likely to hit)

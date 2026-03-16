@@ -32,6 +32,7 @@ export interface Corners {
   predicted_total: number;
   home_corners: number;
   away_corners: number;
+  over_65: number;
   over_85: number;
   over_95: number;
   over_105: number;

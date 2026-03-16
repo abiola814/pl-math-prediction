@@ -129,15 +129,25 @@ class CardPredictor:
     def _select_best_line(
         over_under: dict[float, float],
     ) -> tuple[float, str, float]:
-        """Pick the best Over card line.
+        """Pick the safest Over card line with good value.
 
-        Always recommends Over — picks the highest line where
-        probability is 50%+.
+        Prefers the safest viable line (2.5) — only recommends a higher
+        line if confidence is very high (65%+). This avoids risky 3.5+
+        picks when 2.5 is already solid.
         """
-        # Check lines from highest to lowest, pick highest with 50%+
-        for line in sorted(over_under.keys(), reverse=True):
+        # Start from the safest line (lowest) and prefer it
+        for line in sorted(over_under.keys()):
             over_prob = over_under[line]
-            if over_prob >= 0.50:
+            # Accept the first line with 55%+ confidence (safe pick)
+            if over_prob >= 0.55:
+                # Only go higher if the next line has 65%+ confidence
+                next_lines = [l for l in sorted(over_under.keys()) if l > line]
+                for next_line in next_lines:
+                    if over_under[next_line] >= 0.65:
+                        line = next_line
+                        over_prob = over_under[next_line]
+                    else:
+                        break
                 return line, f"Over {line} Cards", over_prob
 
         # Fallback: pick the lowest line (most likely to hit)

@@ -59,6 +59,7 @@ def _to_response(pred) -> PredictionResponse:
             predicted_total=pred.corners.predicted_total,
             home_corners=pred.corners.home_corners,
             away_corners=pred.corners.away_corners,
+            over_65=pred.corners.over_65,
             over_85=pred.corners.over_85,
             over_95=pred.corners.over_95,
             over_105=pred.corners.over_105,
@@ -155,7 +156,7 @@ def _get_result(home: int, away: int) -> str:
 
 
 def _check_ou(market: str, total: int) -> bool | None:
-    for line in ["3.5", "2.5", "1.5", "0.5"]:
+    for line in ["12.5", "11.5", "10.5", "9.5", "8.5", "7.5", "6.5", "5.5", "4.5", "3.5", "2.5", "1.5", "0.5"]:
         t = float(line)
         if f"Over {line}" in market:
             return total > t
