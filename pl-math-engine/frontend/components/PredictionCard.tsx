@@ -27,8 +27,7 @@ function ConfidenceDots({ level }: { level: number }) {
 
 export default function PredictionCard({ prediction }: PredictionCardProps) {
   const [showAI, setShowAI] = useState(false);
-  const { predicted_score, market, corners, cards, top_scorelines, llm_verdict } =
-    prediction;
+  const { market, corners, cards, llm_verdict } = prediction;
 
   const matchDate = new Date(prediction.date);
   const dateStr = matchDate.toLocaleDateString("en-GB", {
@@ -44,33 +43,16 @@ export default function PredictionCard({ prediction }: PredictionCardProps) {
       {/* Date */}
       <p className="text-xs text-gray-500 mb-3 text-center">{dateStr}</p>
 
-      {/* Teams and Score */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex-1 text-right">
-          <p className="font-semibold text-gray-900 text-sm">
-            {prediction.home_team}
-          </p>
-        </div>
-        <div className="mx-4 flex items-center gap-2">
-          <span className="text-3xl font-bold text-purple-900">
-            {predicted_score.home_goals}
-          </span>
-          <span className="text-gray-400 text-lg">-</span>
-          <span className="text-3xl font-bold text-purple-900">
-            {predicted_score.away_goals}
-          </span>
-        </div>
-        <div className="flex-1 text-left">
-          <p className="font-semibold text-gray-900 text-sm">
-            {prediction.away_team}
-          </p>
-        </div>
+      {/* Teams */}
+      <div className="text-center mb-4">
+        <p className="font-semibold text-gray-900 text-sm">
+          {prediction.home_team}
+        </p>
+        <p className="text-gray-400 text-xs my-0.5">vs</p>
+        <p className="font-semibold text-gray-900 text-sm">
+          {prediction.away_team}
+        </p>
       </div>
-
-      {/* Score Probability */}
-      <p className="text-center text-xs text-gray-500 mb-3">
-        Score probability: {Math.round(prediction.score_probability * 100)}%
-      </p>
 
       {/* Stats Market Badges */}
       <div className="flex flex-wrap gap-2 justify-center mb-3">
@@ -151,21 +133,6 @@ export default function PredictionCard({ prediction }: PredictionCardProps) {
 
       {/* Card Prediction */}
       <CardPrediction cards={cards} />
-
-      {/* Top Scorelines */}
-      <div className="mt-3 text-xs text-gray-500">
-        <p className="font-medium mb-1">Most likely:</p>
-        <div className="flex flex-wrap gap-1">
-          {top_scorelines.slice(0, 3).map(([score, prob]) => (
-            <span
-              key={score}
-              className="bg-gray-100 px-2 py-0.5 rounded text-gray-600"
-            >
-              {score} ({Math.round(prob * 100)}%)
-            </span>
-          ))}
-        </div>
-      </div>
 
       {/* AI Market Verdict */}
       {llm_verdict && llm_verdict.summary && (

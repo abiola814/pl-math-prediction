@@ -85,16 +85,6 @@ export default function AccuracyPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <AccuracyStat
-          label="Exact Score"
-          value={accuracy.exact_score_accuracy}
-          color="text-purple-700"
-        />
-        <AccuracyStat
-          label="Correct Result (H/D/A)"
-          value={accuracy.result_accuracy}
-          color="text-green-700"
-        />
-        <AccuracyStat
           label="Over/Under"
           value={accuracy.over_under_accuracy}
           color="text-blue-700"
@@ -127,23 +117,6 @@ export default function AccuracyPage() {
               For each match, the system selects the single highest-confidence
               market pick (goals O/U, BTTS, home/away goals, corners, or
               cards) and checks if it was correct.
-            </p>
-          </div>
-          <div>
-            <p className="font-medium text-gray-800">Exact Score</p>
-            <p>
-              Predicted scoreline matches the actual result exactly (e.g.,
-              predicted 2-1, actual 2-1).{" "}
-              <span className="font-medium text-purple-700">
-                ~10% is typical — even the best models rarely exceed this.
-              </span>{" "}
-              The real value is in correct result and market picks.
-            </p>
-          </div>
-          <div>
-            <p className="font-medium text-gray-800">Correct Result</p>
-            <p>
-              Predicted the right outcome: Home win, Draw, or Away win
             </p>
           </div>
           <div>

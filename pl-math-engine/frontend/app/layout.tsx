@@ -48,6 +48,12 @@ export default function RootLayout({
                 Predictions
               </a>
               <a
+                href="/game-of-the-week"
+                className="hover:text-purple-300 transition-colors"
+              >
+                Game of the Week
+              </a>
+              <a
                 href="/results"
                 className="hover:text-purple-300 transition-colors"
               >
@@ -105,6 +111,12 @@ export default function RootLayout({
                 className="py-2 px-2 rounded hover:bg-purple-800 transition-colors"
               >
                 Predictions
+              </a>
+              <a
+                href="/game-of-the-week"
+                className="py-2 px-2 rounded hover:bg-purple-800 transition-colors"
+              >
+                Game of the Week
               </a>
               <a
                 href="/results"
